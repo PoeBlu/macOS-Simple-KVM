@@ -35,7 +35,7 @@ class Filesystem:
         remote = requests.get(url, stream=True, headers=ClientMeta.osinstall)
 
         with open(filename, 'wb') as f:
-            with click.progressbar(remote.iter_content(1024), length=size/1024, label="Fetching {} ...".format(filename)) as stream:
+            with click.progressbar(remote.iter_content(1024), length=size/1024, label=f"Fetching {filename} ...") as stream:
                 for data in stream:
                     f.write(data)
         return filename
@@ -63,7 +63,7 @@ class SoftwareService:
         self.catalog_data = ""
 
     def getcatalog(self):
-        logging.info("Network Request: %s", "Fetching {}".format(self.catalog_url))
+        logging.info("Network Request: %s", f"Fetching {self.catalog_url}")
         catalog_raw = requests.get(self.catalog_url, headers=ClientMeta.swupdate)
         self.catalog_data = catalog_raw.text.encode('UTF-8')
         return catalog_raw.text.encode('UTF-8')
@@ -75,13 +75,16 @@ class SoftwareService:
         else:
             root = plistlib.readPlistFromString(self.catalog_data)
 
-        # Iterate to find valid OSInstall packages
-        ospackages = []
         products = root['Products']
-        for product in products:
-            if products.get(product, {}).get('ExtendedMetaInfo', {}).get('InstallAssistantPackageIdentifiers', {}).get('OSInstall', {}) == 'com.apple.mpkg.OSInstall':
-                ospackages.append(product)
-        return ospackages
+        return [
+            product
+            for product in products
+            if products.get(product, {})
+            .get('ExtendedMetaInfo', {})
+            .get('InstallAssistantPackageIdentifiers', {})
+            .get('OSInstall', {})
+            == 'com.apple.mpkg.OSInstall'
+        ]
 
 
 class MacOSProduct:
@@ -118,18 +121,17 @@ def fetchmacos(output_dir="BaseSystem/", catalog_id="PublicRelease", product_id=
     # If latest is used, find the latest OSInstall package
     if latest:
         product_id = remote.getosinstall()[-1]
-    else:
-        if product_id == "":
-            print("You must provide a Product ID (or pass the -l flag) to continue.")
-            exit(1)
+    elif product_id == "":
+        print("You must provide a Product ID (or pass the -l flag) to continue.")
+        exit(1)
 
     # Fetch the given Product ID
     try:
         product = MacOSProduct(catalog, product_id)
     except KeyError:
-        print("Product ID {} could not be found.".format(product_id))
+        print(f"Product ID {product_id} could not be found.")
         exit(1)
-    logging.info("Selected macOS Product: {}".format(product_id))
+    logging.info(f"Selected macOS Product: {product_id}")
 
     # Download package to disk
     product.fetchpackages(output_dir, keyword="BaseSystem")
